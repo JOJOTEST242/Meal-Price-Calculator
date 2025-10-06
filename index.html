@@ -111,7 +111,6 @@ function renderMeals() {
   const container = document.getElementById("meals");
   container.innerHTML = "";
   meals.forEach((meal, mealIndex) => {
-    // 樣式優化: 使用 div 容器來實現卡片模式
     const card = document.createElement("div");
     card.className = "meal-card";
     
@@ -120,12 +119,18 @@ function renderMeals() {
                        <tr><th>食物</th><th>數量</th><th>單價(元)</th><th>小計(元)</th><th>操作</th></tr>`;
                        
     meal.items.forEach((item, itemIndex) => {
-      let savedPrice = localStorage.getItem(`meal${mealIndex}_item${itemIndex}`) || 0; 
+      // *** 建議修正 1 ***: 從 localStorage 讀取價格時，改用食物名稱作為 key
+      let savedPrice = localStorage.getItem('price_' + item.name) || 0; 
       const row = document.createElement("tr");
       row.innerHTML = `
         <td>${item.name}</td>
         <td>${item.qty}</td>
-        <td><input type="number" min="0" value="${savedPrice}" data-meal="${mealIndex}" data-item="${itemIndex}" oninput="updateTotal()" onfocus="this.select()"></td>
+        
+        <td><input type="number" min="0" value="${savedPrice}" 
+                   data-meal="${mealIndex}" data-item="${itemIndex}" 
+                   data-food-name="${item.name}" 
+                   oninput="handlePriceInput(this)" onfocus="this.select()"></td>
+                   
         <td><span id="subtotal-${mealIndex}-${itemIndex}">0</span></td>
         <td>${mealIndex >= 3 ? '<button onclick="removeCustomItem('+mealIndex+','+itemIndex+')" style="background-color:#e74c3c;">刪除</button>' : ''}</td>
       `;
@@ -139,6 +144,29 @@ function renderMeals() {
   updateTotal();
 }
 
+// *** 建議修正 3 ***: 新增一個函式專門處理價格輸入與同步
+function handlePriceInput(inputElement) {
+    const foodName = inputElement.dataset.foodName;
+    const price = parseFloat(inputElement.value) || 0;
+
+    // 步驟1: 將價格以食物名稱為 key 存入 localStorage
+    localStorage.setItem('price_' + foodName, price);
+
+    // 步驟2: 找出頁面上所有相同食物的輸入框
+    const allInputsForSameFood = document.querySelectorAll(`input[data-food-name='${foodName}']`);
+    
+    // 步驟3: 同步更新這些輸入框的值
+    allInputsForSameFood.forEach(input => {
+        if (input !== inputElement) { // 避免更新正在輸入的那個
+            input.value = price;
+        }
+    });
+
+    // 步驟4: 呼叫原本的 updateTotal 來重新計算所有總價
+    updateTotal();
+}
+
+
 function updateTotal() {
   let grandTotal = 0;
   meals.forEach((meal, mealIndex) => {
@@ -147,7 +175,10 @@ function updateTotal() {
       const priceInput = document.querySelector(`input[data-meal='${mealIndex}'][data-item='${itemIndex}']`);
       if (priceInput) { 
           const price = parseFloat(priceInput.value) || 0;
-          localStorage.setItem(`meal${mealIndex}_item${itemIndex}`, price);
+          
+          // *** 建議修正 4 ***: 移除在此處儲存價格的動作，因為已由 handlePriceInput 處理
+          // localStorage.setItem(`meal${mealIndex}_item${itemIndex}`, price); // 此行已移除
+
           const subtotal = price * item.qty;
           const subtotalSpan = document.getElementById(`subtotal-${mealIndex}-${itemIndex}`);
           if (subtotalSpan) {
@@ -165,40 +196,36 @@ function updateTotal() {
   });
   document.getElementById("grandTotal").innerText = grandTotal.toFixed(0);
   
-  // *** 主要修正 ***: 動態更新總計標題
   const mealCount = meals.length;
   const grandTotalLabel = document.getElementById('grandTotalLabel');
   if (grandTotalLabel) {
-    // 您也可以將文字直接修改為 '所有餐點總計' 或 '總計金額'
     grandTotalLabel.innerText = `${numberToChinese(mealCount)}餐總計`;
   }
   
-  // 修正4: 更新按鈕上的下一個餐點名稱
   const nextMealNameElem = document.getElementById("nextMealName");
   if (nextMealNameElem) {
-    nextMealNameElem.innerText = getNextCustomMealName().replace('餐點', ''); // 僅顯示數字部分在按鈕上
+    nextMealNameElem.innerText = getNextCustomMealName().replace('餐點', '');
   }
 }
 
+// *** 建議修正 5 ***: 更新清空價格的邏輯，並增加操作確認
 function clearPrices() {
-  meals.forEach((meal, mealIndex) => {
-    meal.items.forEach((item, itemIndex) => {
-      localStorage.removeItem(`meal${mealIndex}_item${itemIndex}`);
+  if (confirm("您確定要清空所有已儲存的單價嗎？此操作無法復原。")) {
+    // 遍歷所有已知的食物選項，並移除其對應的價格
+    foodOptions.forEach(foodName => {
+        localStorage.removeItem('price_' + foodName);
     });
-  });
-  renderMeals();
+    // 重新渲染所有餐點，價格欄位將會變回 0
+    renderMeals();
+  }
 }
 
 // 自訂餐點功能
 function addCustomMeal() {
-  // 修正5: 使用輔助函式取得正確的遞增餐點名稱
   const name = getNextCustomMealName();
-  
   const newMeal = { name: name, items: [] };
   meals.push(newMeal);
   renderCustomMeals();
-  
-  // 自動滾動至新增的餐點區域 (優化視覺體驗)
   document.getElementById("meals").scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
@@ -222,7 +249,6 @@ function renderCustomMeals() {
     container.appendChild(div);
   });
   
-  // 保留原有結構：先渲染操作區塊，再渲染所有餐點表格 (包含自訂餐點)
   renderMeals(); 
 }
 
@@ -237,14 +263,8 @@ function addItemToCustomMeal(mealIndex) {
 function removeCustomMeal(mealIndex) {
   if(mealIndex < 3) return; 
   if(confirm(`確定刪除餐點 ${meals[mealIndex].name} 嗎？`)) {
-    // 在刪除餐點之前，先清除該餐點的所有價格資料
-    meals[mealIndex].items.forEach((item, itemIndex) => {
-        localStorage.removeItem(`meal${mealIndex}_item${itemIndex}`);
-    });
-    
+    // *** 建議修正 6 ***: 由於價格是跟隨食物名稱，刪除餐點時不再需要手動清除價格
     meals.splice(mealIndex, 1);
-    
-    // 關鍵修正：刪除後需要重新渲染，因為後續的自訂餐點索引會往前移動
     renderCustomMeals();
   }
 }
@@ -252,12 +272,8 @@ function removeCustomMeal(mealIndex) {
 function removeCustomItem(mealIndex, itemIndex) {
   if(mealIndex < 3) return; 
   if(confirm("確定刪除這個食物嗎？")) {
-    // 在刪除項目之前，先清除該項目的價格資料
-    localStorage.removeItem(`meal${mealIndex}_item${itemIndex}`);
-    
+    // *** 建議修正 7 ***: 同上，刪除品項時也不再需要手動清除價格
     meals[mealIndex].items.splice(itemIndex, 1);
-    
-    // 關鍵修正：刪除後需要重新渲染，因為同一個餐點內的項目索引會變動
     renderCustomMeals();
   }
 }
