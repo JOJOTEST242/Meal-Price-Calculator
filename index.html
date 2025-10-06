@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>餐點價格計算器</title>
+<style>
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f9; padding: 20px; color: #333; }
+  h1, h2 { margin-top: 20px; color: #2c3e50; border-bottom: 2px solid #bdc3c7; padding-bottom: 5px; }
+  
+  /* 卡片模式優化 */
+  #meals { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 30px; }
+  .meal-card { background: #ffffff; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); padding: 15px; width: calc(33% - 20px); min-width: 300px; }
+  .meal-card h3 { color: #34495e; margin-top: 0; }
+
+  table { border-collapse: collapse; width: 100%; margin-bottom: 15px; }
+  th, td { border: 1px solid #ecf0f1; padding: 8px; text-align: center; font-size: 0.9em; }
+  th { background-color: #e8f0fe; color: #2c3e50; }
+  
+  /* 單價輸入框優化 */
+  input[type="number"] { width: 65px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
+
+  .total { font-weight: bold; font-size: 1.2em; color: #2980b9; }
+  .high { color: #e74c3c; }
+  
+  /* 按鈕優化 (圓角樣式) */
+  button { 
+    padding: 8px 16px; margin: 5px 5px 5px 0; font-size: 0.95em; 
+    border: none; border-radius: 20px; cursor: pointer; 
+    transition: background-color 0.3s;
+    background-color: #3498db; color: white;
+  }
+  button:hover { background-color: #2980b9; }
+  
+  .custom-section { border: 1px solid #aaa; padding: 15px; margin-bottom: 20px; background-color: #ecf0f1; border-radius: 8px; }
+  select { width: 120px; padding: 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<h1>餐點價格計算器</h1>
+
+<button onclick="clearPrices()">清空所有價格</button>
+
+<div id="meals"></div>
+
+<h2 style="clear:both;">自訂餐點</h2>
+<div class="custom-section">
+  <button onclick="addCustomMeal()">新增餐點：<span id="nextMealName">餐點4</span></button>
+  <div id="customMealsContainer"></div>
+</div>
+
+<p class="total">三餐總計：<span id="grandTotal">0</span> 元</p>
+
+<script>
+const foodOptions = ['A雞腿','B肉串','C雞屁股','D米腸','E甜不辣','F豬血糕','G丸子','H鑫鑫腸','I豆腐','J雞翅'];
+
+let meals = [
+  { name: "餐點1", items: [
+      { name: "A雞腿", qty: 1 },
+      { name: "B肉串", qty: 4 },
+      { name: "C雞屁股", qty: 3 },
+      { name: "D米腸", qty: 2 }
+    ]
+  },
+  { name: "餐點2", items: [
+      { name: "A雞腿", qty: 1 },
+      { name: "E甜不辣", qty: 2 },
+      { name: "F豬血糕", qty: 2 }
+    ]
+  },
+  { name: "餐點3", items: [
+      { name: "G丸子", qty: 3 },
+      { name: "E甜不辣", qty: 2 },
+      { name: "F豬血糕", qty: 4 },
+      { name: "H鑫鑫腸", qty: 3 },
+      { name: "C雞屁股", qty: 2 },
+      { name: "I豆腐", qty: 3 },
+      { name: "J雞翅", qty: 1 }
+    ]
+  }
+];
+
+// 修正2: 新增一個輔助函式，用於計算下一個自訂餐點的名稱
+function getNextCustomMealName() {
+    let customMealCount = 0;
+    // 從陣列中找出所有自訂餐點 (mealIndex >= 3)
+    meals.forEach((meal, index) => {
+        if (index >= 3) {
+            customMealCount++;
+        }
+    });
+    // 下一個餐點的編號是 4 (餐點3之後) + 已有的自訂餐點數量
+    return `餐點${3 + customMealCount + 1}`;
+}
+
+function renderMeals() {
+  const container = document.getElementById("meals");
+  container.innerHTML = "";
+  meals.forEach((meal, mealIndex) => {
+    // 樣式優化: 使用 div 容器來實現卡片模式
+    const card = document.createElement("div");
+    card.className = "meal-card";
+    
+    const table = document.createElement("table");
+    table.innerHTML = `<tr><th colspan="5"><h3>${meal.name}</h3></th></tr>
+                       <tr><th>食物</th><th>數量</th><th>單價(元)</th><th>小計(元)</th><th>操作</th></tr>`;
+                       
+    meal.items.forEach((item, itemIndex) => {
+      let savedPrice = localStorage.getItem(`meal${mealIndex}_item${itemIndex}`) || 0; 
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${item.name}</td>
+        <td>${item.qty}</td>
+        <td><input type="number" min="0" value="${savedPrice}" data-meal="${mealIndex}" data-item="${itemIndex}" oninput="updateTotal()" onfocus="this.select()"></td>
+        <td><span id="subtotal-${mealIndex}-${itemIndex}">0</span></td>
+        <td>${mealIndex >= 3 ? '<button onclick="removeCustomItem('+mealIndex+','+itemIndex+')" style="background-color:#e74c3c;">刪除</button>' : ''}</td>
+      `;
+      table.appendChild(row);
+    });
+    table.innerHTML += `<tr><td colspan="3" class="total">小計</td><td class="total" id="mealTotal-${mealIndex}">0</td><td></td></tr>`;
+    
+    card.appendChild(table);
+    container.appendChild(card);
+  });
+  updateTotal();
+}
+
+function updateTotal() {
+  let grandTotal = 0;
+  meals.forEach((meal, mealIndex) => {
+    let mealTotal = 0;
+    meal.items.forEach((item, itemIndex) => {
+      const priceInput = document.querySelector(`input[data-meal='${mealIndex}'][data-item='${itemIndex}']`);
+      if (priceInput) { 
+          const price = parseFloat(priceInput.value) || 0;
+          localStorage.setItem(`meal${mealIndex}_item${itemIndex}`, price);
+          const subtotal = price * item.qty;
+          const subtotalSpan = document.getElementById(`subtotal-${mealIndex}-${itemIndex}`);
+          if (subtotalSpan) {
+            subtotalSpan.innerText = subtotal.toFixed(0);
+          }
+          mealTotal += subtotal;
+      }
+    });
+    const mealTotalElem = document.getElementById(`mealTotal-${mealIndex}`);
+    if (mealTotalElem) {
+        mealTotalElem.innerText = mealTotal.toFixed(0);
+        mealTotalElem.className = mealTotal > 200 ? 'total high' : 'total';
+    }
+    grandTotal += mealTotal;
+  });
+  document.getElementById("grandTotal").innerText = grandTotal.toFixed(0);
+  
+  // 修正4: 更新按鈕上的下一個餐點名稱
+  const nextMealNameElem = document.getElementById("nextMealName");
+  if (nextMealNameElem) {
+    nextMealNameElem.innerText = getNextCustomMealName().replace('餐點', ''); // 僅顯示數字部分在按鈕上
+  }
+}
+
+function clearPrices() {
+  meals.forEach((meal, mealIndex) => {
+    meal.items.forEach((item, itemIndex) => {
+      localStorage.removeItem(`meal${mealIndex}_item${itemIndex}`);
+    });
+  });
+  renderMeals();
+}
+
+// 自訂餐點功能
+function addCustomMeal() {
+  // 修正5: 使用輔助函式取得正確的遞增餐點名稱
+  const name = getNextCustomMealName();
+  
+  const newMeal = { name: name, items: [] };
+  meals.push(newMeal);
+  renderCustomMeals();
+  
+  // 自動滾動至新增的餐點區域 (優化視覺體驗)
+  document.getElementById("meals").scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+function renderCustomMeals() {
+  const container = document.getElementById("customMealsContainer");
+  container.innerHTML = "";
+  meals.forEach((meal, mealIndex) => {
+    if(mealIndex < 3) return; 
+
+    const div = document.createElement("div");
+    div.className = "custom-section";
+    div.innerHTML = `<h3>${meal.name} <button onclick="removeCustomMeal(${mealIndex})" style="background-color:#c0392b;">刪除餐點</button></h3>`;
+    
+    const addItemDiv = document.createElement("div");
+    addItemDiv.innerHTML = `選擇食物：
+      <select id="foodSelect-${mealIndex}">${foodOptions.map(f=>`<option value="${f}">${f}</option>`).join('')}</select>
+      數量：<input type="number" id="qtyInput-${mealIndex}" min="1" value="1">
+      <button onclick="addItemToCustomMeal(${mealIndex})" style="background-color:#27ae60;">新增食物</button>`;
+    div.appendChild(addItemDiv);
+    
+    container.appendChild(div);
+  });
+  
+  // 保留原有結構：先渲染操作區塊，再渲染所有餐點表格 (包含自訂餐點)
+  renderMeals(); 
+}
+
+function addItemToCustomMeal(mealIndex) {
+  const food = document.getElementById(`foodSelect-${mealIndex}`).value;
+  const qty = parseInt(document.getElementById(`qtyInput-${mealIndex}`).value) || 1;
+  
+  meals[mealIndex].items.push({ name: food, qty: qty });
+  renderCustomMeals();
+}
+
+function removeCustomMeal(mealIndex) {
+  if(mealIndex < 3) return; 
+  if(confirm(`確定刪除餐點 ${meals[mealIndex].name} 嗎？`)) {
+    // 在刪除餐點之前，先清除該餐點的所有價格資料
+    meals[mealIndex].items.forEach((item, itemIndex) => {
+        localStorage.removeItem(`meal${mealIndex}_item${itemIndex}`);
+    });
+    
+    meals.splice(mealIndex, 1);
+    
+    // 關鍵修正：刪除後需要重新渲染，因為後續的自訂餐點索引會往前移動
+    renderCustomMeals();
+  }
+}
+
+function removeCustomItem(mealIndex, itemIndex) {
+  if(mealIndex < 3) return; 
+  if(confirm("確定刪除這個食物嗎？")) {
+    // 在刪除項目之前，先清除該項目的價格資料
+    localStorage.removeItem(`meal${mealIndex}_item${itemIndex}`);
+    
+    meals[mealIndex].items.splice(itemIndex, 1);
+    
+    // 關鍵修正：刪除後需要重新渲染，因為同一個餐點內的項目索引會變動
+    renderCustomMeals();
+  }
+}
+
+// 初始化
+renderMeals();
+renderCustomMeals();
+</script>
+
+</body>
+</html>
