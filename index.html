@@ -50,7 +50,7 @@
   <div id="customMealsContainer"></div>
 </div>
 
-<p class="total">三餐總計：<span id="grandTotal">0</span> 元</p>
+<p class="total"><span id="grandTotalLabel">三餐總計</span>：<span id="grandTotal">0</span> 元</p>
 
 <script>
 const foodOptions = ['A雞腿','B肉串','C雞屁股','D米腸','E甜不辣','F豬血糕','G丸子','H鑫鑫腸','I豆腐','J雞翅'];
@@ -92,6 +92,19 @@ function getNextCustomMealName() {
     });
     // 下一個餐點的編號是 4 (餐點3之後) + 已有的自訂餐點數量
     return `餐點${3 + customMealCount + 1}`;
+}
+
+// *** 新增建議 ***: 輔助函式，將數字轉換為中文數字
+function numberToChinese(num) {
+  const chars = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+  if (num >= 0 && num <= 10) {
+    return chars[num];
+  }
+  if (num > 10 && num < 20) {
+    return '十' + chars[num % 10];
+  }
+  // 為了簡化，此處僅處理到 19。若有需要可再擴充。
+  return num; // 如果數字超出範圍，直接返回原數字
 }
 
 function renderMeals() {
@@ -151,6 +164,14 @@ function updateTotal() {
     grandTotal += mealTotal;
   });
   document.getElementById("grandTotal").innerText = grandTotal.toFixed(0);
+  
+  // *** 主要修正 ***: 動態更新總計標題
+  const mealCount = meals.length;
+  const grandTotalLabel = document.getElementById('grandTotalLabel');
+  if (grandTotalLabel) {
+    // 您也可以將文字直接修改為 '所有餐點總計' 或 '總計金額'
+    grandTotalLabel.innerText = `${numberToChinese(mealCount)}餐總計`;
+  }
   
   // 修正4: 更新按鈕上的下一個餐點名稱
   const nextMealNameElem = document.getElementById("nextMealName");
